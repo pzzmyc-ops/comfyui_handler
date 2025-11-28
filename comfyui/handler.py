@@ -62,16 +62,23 @@ class ComfyUIHandler:
             
             logger.info(f"Starting prompt processing, timeout: {timeout}s")
 
+            max_try = 60
             # Health check before submitting task (important for serverless environments)
-            health = await self.health_check()
-            if health["status"] != "healthy":
-                logger.error(f"ComfyUI 未启动: {health.get('error', 'Unknown error')}")
-                return {
-                    "status": "error",
-                    "error": f"ComfyUI 未启动: {health.get('error', 'Unknown error')}",
-                    "prompt_id": None
-                }
-            
+            for i in range(max_try):
+                logger.info(f"Checking ComfyUI health, iteration {i+1}/60")
+                health = await self.health_check()
+                if health["status"] != "healthy":
+                    logger.info(f"ComfyUI 未启动: {health.get('error', 'Unknown error')}")
+                    if i == max_try-1:
+                        logger.error("ComfyUI 未启动，请检查服务是否正常")
+                        return {
+                            "status": "error",
+                            "error": "ComfyUI 未启动，请检查服务是否正常",
+                            "prompt_id": None
+                        }
+                    # 如果未启动，等待5s后重试
+                    await asyncio.sleep(5)
+
             logger.info("ComfyUI 已启动！")
             
             # Submit task and wait for completion
@@ -84,10 +91,10 @@ class ComfyUIHandler:
             # Build compatible response format
             response = {
                 "prompt_id": result["prompt_id"],
-                "status": "success",
+                "status": result["status"],
                 "execution_time": execution_time,
                 "outputs": result["history"].get("outputs", {}),
-                "node_errors": {},  # ComfyUI native error format
+                "node_errors": result.get("error", {}),  # ComfyUI native error format
             }
             
             # Add image data if available

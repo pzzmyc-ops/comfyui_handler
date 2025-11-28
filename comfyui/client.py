@@ -106,30 +106,25 @@ class ComfyUIClient:
             # Check history for results
             history = await self.get_history(prompt_id)
             if history is not None:
-                # Task completed
-                if "outputs" in history:
-                    return history
-                elif "status" in history and history["status"].get("status_str") == "error":
+                if "status" in history and history["status"].get("status_str") == "error":
                     # Extract detailed error information from ComfyUI
                     status = history.get("status", {})
                     error_info = []
-                    
+
                     # Get exception message if available
                     if status.get("exception_message"):
                         error_info.append(status["exception_message"])
-                    
+
                     # Get messages if available
                     messages = status.get("messages", [])
                     if messages:
                         for msg in messages:
-                            if isinstance(msg, (list, tuple)) and len(msg) >= 2:
-                                error_info.append(f"{msg[0]}: {msg[1]}")
-                            elif isinstance(msg, str):
-                                error_info.append(msg)
-                    
-                    # If no specific error info found, return entire history for debugging
-                    error_msg = "; ".join(error_info) if error_info else json.dumps(history, ensure_ascii=False)
-                    raise Exception(f"Task execution failed: {error_msg}")
+                            if isinstance(msg, (list, tuple)) and len(msg) >= 2 and msg[0] == "execution_error":
+                                return history, "error", msg
+                    return history, "error", {}
+                # Task completed
+                elif "outputs" in history:
+                    return history, "success", {}
             
             # Check queue status
             queue_status = await self.get_queue_status()
@@ -147,7 +142,7 @@ class ComfyUIClient:
                 # Task not in queue, check history again
                 history = await self.get_history(prompt_id)
                 if history is not None:
-                    return history
+                    return history, "success", {}
                 else:
                     raise Exception(f"Task {prompt_id} not found")
             
@@ -257,19 +252,28 @@ class ComfyUIClient:
         # Submit task
         prompt_id = await self.queue_prompt(prompt)
         logger.info(f"Task submitted, ID: {prompt_id}")
-        
+
         # Wait for completion
-        history = await self.wait_for_completion(prompt_id, timeout)
+        history, status, error = await self.wait_for_completion(prompt_id, timeout)
         logger.info(f"Task {prompt_id} completed")
-        
+
+        if status != "success":
+            return {
+                "prompt_id": prompt_id,
+                "history": history,
+                "status": status,
+                "error": error
+            }
         # Get image information (metadata only by default)
         if return_base64:
             images = await self.get_output_images_base64(history)
         else:
             images = await self.get_output_images_info(history)
-        
+
         return {
             "prompt_id": prompt_id,
             "history": history,
-            "images": images
+            "images": images,
+            "status": status,
+            "error": error
         } 
