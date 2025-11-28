@@ -78,6 +78,8 @@ class ComfyUIHandler:
                         }
                     # 如果未启动，等待5s后重试
                     await asyncio.sleep(5)
+                    continue
+                break
 
             logger.info("ComfyUI 已启动！")
             
