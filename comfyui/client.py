@@ -120,7 +120,7 @@ class ComfyUIClient:
                     if messages:
                         for msg in messages:
                             if isinstance(msg, (list, tuple)) and len(msg) >= 2 and msg[0] == "execution_error":
-                                return history, "error", msg
+                                return history, "error", msg[1]
                     return history, "error", {}
                 # Task completed
                 elif "outputs" in history:
