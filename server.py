@@ -175,12 +175,23 @@ async def interrupt_execution():
 
 @app.get("/health")
 async def health_check():
-    """Health check"""
+    """
+    Health check
+    Returns 200 only when ComfyUI is fully ready
+    Returns 503 when ComfyUI is not available (for serverless readiness probe)
+    """
     try:
-        return await comfyui_handler.health_check()
+        result = await comfyui_handler.health_check()
+        if result.get("status") != "healthy":
+            # Return 503 so serverless platforms know the service is not ready
+            return JSONResponse(
+                status_code=503,
+                content=result
+            )
+        return result
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 
